@@ -1,0 +1,170 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+
+
+* * *
+
+## Part 1: Data
+The Behavioral Risk Factor Surveillance System (BRFSS) is the nation’s premier system of health-related telephone surveys that collect state data about U.S. residents regarding their health-related risk behaviors, chronic health conditions, and use of preventive services. Established in 1984 with 15 states, BRFSS now collects data in all 50 states as well as the District of Columbia and three U.S. territories. BRFSS completes more than 400,000 adult interviews each year, making it the largest continuously conducted health survey system in the world.
+
+For this brief research project I'm going to use the dataframe from 2013, which consists of 491,775 observations and 330 variables, that are described in the "brfss_codebook" file.
+
+The BRFSS dataframe contains information gathered by two sources: cellular phone numbers or landline phone numbers. On the first occasion, the sample comes from the Simple Random Sampling method, where the respondents are randomly chosen. However, on the second occasion, the sample is gathered via the Stratified Sampling method, where the landline phone numbers are divided into two strata that are based on the presumed density of known telephone household numbers.
+
+Based on the ways that information is collected, we can say that this is an observational research that offers generalizability.
+
+* * *
+
+## Part 2: Research questions
+
+**Research question 1:** Is there a correlation between physical and mental health?
+
+In particular, does bad mood affect the physical state of a person? We often hear that bad mood creates phychosomatic problems. Is it valid?  
+
+**Research question 2:** When people are aware of having high blood cholesterol, do they take action or choose to ignore the problem?
+
+People tend to ignore their health problems until they get too dangerous and risky for their lives. Do people that are informed about having high blood cholesterol, get their selves checked and if yes, how often?  
+
+**Research question 3:** Which healthy habit seems to have the best effect on a person's mental health?
+
+Among quiting smoking, not drinking and exercising, which one is the best mood booster?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Setup**
+```{r load-package , message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(statsr)
+```
+
+**Load the data**
+```{r load-data}
+load("brfss2013.rdata")
+```
+
+**Research question 1:**
+
+To answer this question I'll use 2 variables: genhlth and menthlth.
+
+The first one describes the general health of the person as Excellent (1) , Very Good (2) , Good (3) , Fair (4) or Poor (5).
+
+The second one notes the number of days a person was in a bad state of mind. The answer can be any number from 0 to 30.
+
+To start, I'll create a new variable "numgenhlth", that will contain the rows of genhlth as numbers.
+
+```{r}
+brfss2013 <- brfss2013 %>%
+  mutate(numgenhlth=as.numeric(genhlth))
+```
+
+Next, I will divide people into two categories, assuming that any answer from 1 to 3 is considered as a good health status and the rest not so good.
+
+```{r}
+brfss2013 <- brfss2013 %>%
+  mutate(badHealth = ifelse(numgenhlth>=4 , "yes" , "no"))
+```
+
+Now, I' ll count how many days, people, whose health is fair or worse, were in bad mental state. **NOTE**: By examining the data, I found two false entries (2 numbers larger than 30). I will exclude them from the data analysis.
+
+```{r message=FALSE}
+brfss2013 %>%
+  filter(badHealth=="yes",menthlth>=0,menthlth<=30) %>%
+  group_by(menthlth) %>%
+  summarise(n=n())
+```
+
+With a quick glance, we see that many people with bad health status answered that in a month, they didn't pass a day with bad mental state. 
+
+Now I'll use a  plot to visualise the above outcome.
+
+```{r message=FALSE}
+brfss2013 %>%
+  filter(badHealth=="yes",menthlth>=0,menthlth<=30) %>%
+  group_by(menthlth) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(x=menthlth,y=n))+
+  geom_line()
+```
+
+It seems that nearly 15.000 people were in a bad state of mind for the whole month. At the same time more than 45.000 people, whose physical health was "fair" or worse, were mentally fine everyday.
+In conclusion, the research question turned to be falsed: mental state does not affect the physical state of a person - at least not in a serious and dangerous way. 
+
+**Research question 2:**
+
+For this question I'm going to use 3 variables: toldhi2 , bloodcho and cholchk:
+
+**1.** "toldhi2" is a factor with two levels, "yes" and "no" and answers if the person is aware of having high blood cholesterol.
+
+**2.** "bloodcho" is a factor with two levels, "yes" and "no" and answers if the person has ever checked their self for high blood cholesterol.
+
+**3.** "cholchk" is a factor with 4 levels, "within past year" (1), "within past 2 years" (2), "withing past 5 years" (3) and "5 or more years ago" (4) and notes which was the last time a person checked their self for high blood cholesterol. 
+
+To answer this question I'll first find out how many people are aware of having high blood cholesterol and also have get them selves checked for it at least once in their lives.
+
+```{r}
+brfss2013 %>%
+  filter(toldhi2=="Yes",bloodcho=="Yes") %>%
+  count()
+```
+
+Now I'll compare this number to the number of people that are aware of having high blood cholesterol.
+
+```{r}
+table(brfss2013$toldhi2)
+```
+
+Surprisingly enough, it seems that 100% of people that are aware of having high blood cholesterol, have also get themselves checked at least once in their lives. That is a very positive outcome. Now I'm going to check the frequency of their check ups.
+
+```{r}
+brfss2013 %>%
+  filter(toldhi2=="Yes") %>%
+  group_by(cholchk) %>%
+  ggplot(aes(x=cholchk))+
+  geom_bar()
+```
+
+It seems the vast majority of people aware of having high blood cholesterol, get them selves checked frequently. So the answer to this question is that not only people take action when they are aware of their health problem, but also they do it frequently.
+
+**Research question 3:**
+
+For the final question I'm going to use 4 variables:
+
+**1.** menthlth -> a numeric variable that counts the days of bad mood
+
+**2.** stopsmk2 -> a factor with 2 levels, "Yes" and "No" that answers if the person has stopped smoking in the past 12 months
+
+**3.** alcday5 -> a numeric variable that counts the days of drinking in the past month - we're interested in alcday5==0
+
+**4.** exerany2 -> a factor with 2 levels, "Yes" and "No" that answers if a person engaged in any physical activities the past month
+
+To answer this question I'll compare the mean score of bad days for each variable. The lowest score wins! 
+
+```{r message=FALSE}
+brfss2013 %>%
+  filter(stopsmk2=="Yes", !(is.na(menthlth))) %>%
+  summarise(meansmk = mean(menthlth))
+```
+
+```{r message=FALSE}
+brfss2013 %>%
+  filter(alcday5==0, !(is.na(menthlth))) %>%
+  summarise(meanalc = mean(menthlth))
+```
+
+```{r message=FALSE}
+brfss2013 %>%
+  filter(exerany2=="Yes", !(is.na(menthlth))) %>%
+  summarise(meanexe = mean(menthlth))
+```
+
+It seems that people who work out had less bad days than people who have quitted smoking or didn't drink in the past month. So exercising is the best mood booster. 
